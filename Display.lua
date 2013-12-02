@@ -38,6 +38,10 @@ local unpack = _G.unpack
 
 local AceTimer = addon.GetLib('AceTimer-3.0')
 
+------------------------------------------------------------------------------
+-- Overlay visuals
+------------------------------------------------------------------------------
+
 local fontFile, fontSize, fontFlag = [[Fonts\ARIALN.TTF]], 13, "OUTLINE"
 
 local overlayPrototype = addon.overlayPrototype
@@ -178,9 +182,9 @@ function overlayPrototype:ApplyHighlight()
 	local highlight = self.highlight
 
 	if highlight == "flash" and not (addon.db.profile.noFlashOnCooldown and self.inCooldown) and (not addon.db.profile.noFlashOutOfCombat or InCombatLockdown()) then
-		self:ShowOverlayGlow()
+		self:ShowFlash()
 	else
-		self:HideOverlayGlow()
+		self:HideFlash()
 	end
 
 	local border = self.Border
@@ -213,70 +217,69 @@ function overlayPrototype:UpdateDisplay(event)
 	return true
 end
 
-do
-	local serial = 1
-	local heap = {}
+------------------------------------------------------------------------------
+-- Flash animation
+------------------------------------------------------------------------------
 
-	local OnHide, AnimOutFinished
+local serial = 1
+local heap = {}
 
-	local function CreateOverlayGlow()
-		serial = serial + 1
-		local overlay = CreateFrame("Frame", addonName.."ButtonOverlay"..serial, UIParent, "ActionBarButtonSpellActivationAlert")
-		overlay.animOut:SetScript("OnFinished", AnimOutFinished)
-		overlay:SetScript("OnHide", OnHide)
-		return overlay
-	end
+local function CreateFlash()
+	serial = serial + 1
+	local flash = CreateFrame("Frame", addonName.."Flash"..serial)
+	flash:Hide()
 
-	function AnimOutFinished(animGroup)
-		local overlay = animGroup:GetParent()
-		overlay:Hide()
-		overlay:ClearAllPoints()
-		overlay:SetParent(nil)
-		overlay.state.overlay = nil
-		overlay.state = nil
-		tinsert(heap, overlay)
-	end
+	local tex = flash:CreateTexture("OVERLAY")
+	tex:SetTexture([[Interface\Cooldown\starburst]])
 
-	function OnHide(button)
-		if button.animOut:IsPlaying() then
-			button.animOut:Stop()
-			return AnimOutFinished(button.animOut)
-		end
-	end
+	tex:SetBlendMode("ADD")
+	tex:SetAllPoints(flash)
+	flash.Texture = tex
 
-	function overlayPrototype:ShowOverlayGlow()
-		local overlay = self.overlay
-		if overlay then
-			if overlay.animOut:IsPlaying() then
-				overlay.animOut:Stop()
-				overlay.animIn:Play()
-			end
-		else
-			overlay = tremove(heap) or CreateOverlayGlow()
-			local button = self.button
-			local width, height = button:GetSize()
-			overlay:SetParent(button)
-			overlay:ClearAllPoints()
-			overlay:SetSize(width * 1.4, height * 1.4)
-			overlay:SetPoint("TOPLEFT", button, "TOPLEFT", -width * 0.2, height * 0.2)
-			overlay:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", width * 0.2, -height * 0.2)
-			overlay:Show()
-			overlay.animIn:Play()
-			overlay.state, self.overlay = self, overlay
-		end
-	end
+	local animRotate = flash:CreateAnimationGroup()
+	animRotate:SetLooping("REPEAT")
 
-	function overlayPrototype:HideOverlayGlow()
-		local overlay = self.overlay
-		if overlay then
-			if overlay.animIn:IsPlaying() then
-				overlay.animIn:Stop()
-			end
-			if overlay:IsVisible() then
-				overlay.animOut:Play()
-			else
-				AnimOutFinished(overlay.animOut)
-			end
-		end
-	end
+	local rotation = animRotate:CreateAnimation("Rotation")
+	rotation:SetOrder(1)
+	rotation:SetDuration(3)
+	rotation:SetDegrees(360)
+	rotation:SetOrigin("CENTER", 0, 0)
+
+	animRotate:Play()
+
+	local animScale = flash:CreateAnimationGroup()
+	animScale:SetLooping("BOUNCE")
+
+	local scaling = animScale:CreateAnimation("Scale")
+	scaling:SetOrder(1)
+	scaling:SetDuration(0.5)
+	scaling:SetScale(1.2, 1.2)
+	scaling:SetOrigin("CENTER", 0, 0)
+	scaling:SetSmoothing('IN_OUT')
+
+	animScale:Play()
+
+	return flash
+end
+
+function overlayPrototype:ShowFlash()
+	if self.flash then return end
+	local flash = next(heap) or CreateFlash()
+	heap[flash] = nil
+	flash:SetParent(self)
+	flash:SetPoint("CENTER")
+	local w, h = self:GetSize()
+	flash:SetSize(w*1.4, h*1.4)
+	flash:Show()
+	self.flash = flash
+end
+
+function overlayPrototype:HideFlash()
+	if not self.flash then return end
+	local flash = self.flash
+	flash:Hide()
+	flash:SetParent(nil)
+	flash:ClearAllPoints()
+	self.flash = nil
+	heap[flash] = true
 end
