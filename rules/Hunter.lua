@@ -25,5 +25,6 @@ if not addon.isClass("HUNTER") then return end
 
 AdiButtonAuras:RegisterRules(function()
 	Debug('Adding hunter rules')
-	return ImportPlayerSpells { "HUNTER" }
+
+	ImportPlayerSpells { "HUNTER" }
 end)

@@ -51,7 +51,7 @@ end
 local initialLoading = true
 local function BuildUserRules()
 	Debug('Compiling rules')
-	local rules = {}
+
 	local ph = getprinthandler()
 	for key, rule in pairs(addon.db.global.userRules) do
 		local err = nil
@@ -59,12 +59,10 @@ local function BuildUserRules()
 			local builder, msg = CompileUserRule(rule.code)
 			if builder then
 				setprinthandler(function(...) ph(format('[%s "%s"]:', addonName, rule.title), ...) end)
-				local ok, result = pcall(builder, errorhandler)
+				local ok, msg = pcall(builder, errorhandler)
 				setprinthandler(ph)
-				if ok and result then
-					tinsert(rules, result)
-				else
-					err = result
+				if not ok then
+					err = msg
 				end
 			else
 				err = msg
@@ -76,7 +74,6 @@ local function BuildUserRules()
 		end
 	end
 	initialLoading = false
-	return rules
 end
 
-AdiButtonAuras:RegisterRules(function() return BuildUserRules end)
+--AdiButtonAuras:RegisterRules(function() BuildUserRules() end)

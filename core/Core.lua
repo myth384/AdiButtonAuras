@@ -230,10 +230,12 @@ end
 local CONFIG_CHANGED = addonName..'_Config_Changed'
 local THEME_CHANGED = addonName..'_Theme_Changed'
 local RULES_UPDATED = addonName..'_Rules_Updated'
+local INITIALIZE_RULES = addonName..'_Initialize_Rules'
 
 addon.RULES_UPDATED = RULES_UPDATED
 addon.CONFIG_CHANGED = CONFIG_CHANGED
 addon.THEME_CHANGED = THEME_CHANGED
+addon.INITIALIZE_RULES = INITIALIZE_RULES
 
 function addon:ADDON_LOADED(event, name)
 	-- Initialization
@@ -322,67 +324,45 @@ end
 -- Rule loading and updating
 ------------------------------------------------------------------------------
 
-local builders
-local initializers = {}
+addon.descriptions = {}
 
-local rules, descriptions = {}, {}
-addon.rules = rules
-addon.descriptions = descriptions
+local firstLSSC = true
+function addon:LibSpellbook_Spells_Changed(event)
+	self:Debug(event)
+	if firstLSSC then
+		firstLSSC = false
+		self:SendMessage(INITIALIZE_RULES)
+	end
+	self:SendMessage(RULES_UPDATED)
+end
 
 local function errorhandler(msg)
 	addon:Debug('|cffff0000'..tostring(msg)..'|r')
 	return geterrorhandler()(msg)
 end
 
-local function GetBuilders(event)
-	if not builders then
-		addon:Debug('Initializing rules', event)
-		if #initializers == 0 then
-			error("No rules registered !", 2)
-		end
-		local t = {}
-		for i, initializer in ipairs(initializers) do
-			local ok, result = xpcall(initializer, errorhandler)
-			if ok and result then
-				tinsert(t, result)
-			end
-		end
-		builders = addon.AsList(t, "function")
-		addon:Debug(#builders, 'builders found')
-	end
-	return builders
+function addon.api:RegisterRules(func)
+	func = addon.Restricted(func)
+	xpcall(func, errorhandler)
 end
 
-function addon:LibSpellbook_Spells_Changed(event)
-	self:Debug(event)
-	wipe(rules)
-	wipe(descriptions)
-	for _, builder in ipairs(GetBuilders(event)) do
-		xpcall(builder, errorhandler)
-	end
-	self:SendMessage(RULES_UPDATED)
-end
-
-function addon.api:RegisterRules(initializer)
-	tinsert(initializers, addon.Restricted(initializer))
-	if builders then
-		addon:Debug('Rebuilding rules')
-		builders = nil
-		return addon:LibSpellbook_Spells_Changed('RegisterRules')
-	end
-end
-
-function addon:GetActionConfiguration(actionType, actionId)
-	if actionType == "empty" or actionType == "unsupported" or actionType == "hidden" then
-		return nil, false, nil
+function addon:GetActionConfiguration(actionType, actionId, includeDisabled)
+	if not actionType or actionType == "empty" then
+		return "empty"
+	elseif actionType == "unsupported" or actionType == "hidden" then
+		return actionType
 	end
 	assert(actionType == "item" or actionType == "spell", format("Invalid action type: %q", tostring(actionType)))
 	local key = actionType..':'..actionId
-	local rule = rules[key]
+	local enabled = self.db.profile.enabled[key]
+	if not enabled and not includeDisabled then
+		return "disabled", nil, key
+	end
+	local rule = self.rules[key] or self.items[key]
 	if rule then
-		return rule, self.db.profile.enabled[key], key
+		return enabled and "enabled" or "disabled", rule, key
 	else
-		return nil, false, key
+		return "unknown", nil, key
 	end
 end
 

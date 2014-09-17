@@ -25,20 +25,21 @@ if not addon.isClass("PALADIN") then return end
 
 AdiButtonAuras:RegisterRules(function()
 	Debug('Adding paladin rules')
-	return {
-		ImportPlayerSpells { "PALADIN" },
-		-- display current holy power on spenders and flash it maximum reached
-		ShowPower {
-			{
-				 85256, -- Templar's Verdict
-				114163, -- Eternal Flame
-				 85673, -- Word of Glory
-				 85222, -- Light of Dawn
-				 53600, -- Shield of the Righteous
-			},
-			"HOLY_POWER",
-			nil,
-			"flash",
+
+	ImportPlayerSpells { "PALADIN" }
+
+	-- Display current holy power on spenders and flash it maximum reached
+	ShowPower {
+		{
+			 85256, -- Templar's Verdict
+			114163, -- Eternal Flame
+			 85673, -- Word of Glory
+			 85222, -- Light of Dawn
+			 53600, -- Shield of the Righteous
 		},
+		"HOLY_POWER",
+		nil,
+		"flash",
 	}
+
 end)

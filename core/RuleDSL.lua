@@ -47,13 +47,9 @@ local UnitPower = _G.UnitPower
 local UnitPowerMax = _G.UnitPowerMax
 local unpack = _G.unpack
 local wipe = _G.wipe
-local xpcall = _G.xpcall
-local geterrorhandler = _G.geterrorhandler
 
 local getkeys      = addon.getkeys
 local ucfirst      = addon.ucfirst
-local errorhandler = addon.errorhandler
-local Do           = addon.Do
 local ConcatLists  = addon.ConcatLists
 local FlattenList  = addon.FlattenList
 local AsList       = addon.AsList
@@ -61,7 +57,6 @@ local AsSet        = addon.AsSet
 local MergeSets    = addon.MergeSets
 local BuildKey     = addon.BuildKey
 
-local rules        = addon.rules
 local descriptions = addon.descriptions
 
 local LibPlayerSpells = addon.GetLib('LibPlayerSpells-1.0')
@@ -76,70 +71,124 @@ local function Debug(...) return addon.Debug('|cffffff00Rules:|r', ...) end
 -- Rule creation
 ------------------------------------------------------------------------------
 
-local function SpellOrItemId(value, callLevel)
-	local spellId = tonumber(type(value) == "string" and strmatch(value, "spell:(%d+)") or value)
-	if spellId then
-		local name = GetSpellInfo(spellId)
-		if not name then
-			error(format("Invalid spell identifier: %s", tostring(value)), callLevel+1)
+local baseDefPrototype = {}
+local baseDefMetatable = { __index = baseDefPrototype }
+
+function baseDefPrototype:Initialize()
+	if not self:IsValid() then
+		error(format("Invalid definition for %s", self.configKey))
+	end
+	local name = self:GetName()
+	for ruleKey, rule in pairs(self.rules) do
+		if name and rule.desc then
+			descriptions[ruleKey] = ucfirst(gsub(rule.desc or "", "@NAME", name))
 		end
-		return format("spell:%d", spellId), "spell "..(GetSpellLink(spellId) or spellId), name, "spell", spellId
 	end
-	local itemId = tonumber(strmatch(tostring(value), "item:(%d+)"))
-	if itemId then
-		local name, link = GetItemInfo(itemId)
-		return format("item:%d", itemId), link and ("item "..tostring(link)) or value, name or value, "item"
-	end
-	error(format("Invalid spell or item identifier: %s", tostring(value)), callLevel+1)
 end
 
-local function CheckAvailability(info, spellId, providers)
-	if not LibSpellbook:IsKnown(spellId) then
-		Debug('Unknown spell:', info)
+function baseDefPrototype:GetConfiguration()
+
+	local enabled = false
+	for ruleKey in pairs(self.rules) do
+		if addon.db.profile.rules[ruleKey] then
+			enabled = true
+			break
+		end
+	end
+
+	if not enabled or not self:IsAvailable() then return end
+
+	if not self.conf then
+		self.conf = { name = self:GetName(), units = {}, events = {}, handlers = {}, keys = {} }
+	end
+	wipe(self.conf.units)
+	wipe(self.conf.events)
+	wipe(self.conf.handlers)
+	wipe(self.conf.keys)
+	for ruleKey, rule in pairs(self.rules) do
+		if addon.db.profile.rules[ruleKey] then
+			tinsert(conf.keys, rule.ruleKey)
+			MergeSets(conf.units, rule.units)
+			MergeSets(conf.events, rule.events)
+			MergeSets(conf.handlers, rule.handlers)
+		end
+	end
+	return self.conf
+end
+
+local spellDefPrototype = setmetatable({}, baseDefMetatable)
+local spellDefMetatable = { __index = spellDefPrototype }
+
+function spellDefPrototype:GetName()
+	return (GetSpellInfo(self.id))
+end
+
+function spellDefPrototype:IsValid()
+	return self:GetName() ~= nil
+end
+
+function spellDefPrototype:IsAvailable()
+	if not LibSpellbook:IsKnown(self.id) then
+		Debug('Unknown spell:', self.key)
 		return false
 	end
-	if not providers then return true end
-	for _, provider in ipairs(providers) do
+	if not self.providers then return true end
+	for _, provider in ipairs(self.providers) do
 		if LibSpellbook:IsKnown(provider) then
 			return true
 		end
 	end
-	Debug(info..', no providers found: ', unpack(providers))
+	Debug(self.key..', no providers found: ', unpack(self.providers))
 	return false
 end
 
-local function _AddRuleFor(key, desc, spell, units, events, handlers, providers, callLevel)
-	local id, info, name, _type, subId = SpellOrItemId(spell, callLevel)
-	if not id or (_type == "spell" and not CheckAvailability(info, subId, providers)) then
-		return
+local itemDefPrototype = setmetatable({}, baseDefMetatable)
+local itemDefMetatable = { __index = itemDefPrototype }
+
+function itemDefPrototype:GetName()
+	return (GetItemInfo(self.id))
+end
+
+function itemDefPrototype:IsValid()
+	return true
+end
+
+function itemDefPrototype:IsAvailable()
+	return true
+end
+
+local function ParseValue(value, callLevel)
+	local spellId = tonumber(type(value) == "string" and strmatch(value, "spell:(%d+)") or value)
+	if spellId then
+		return 'spell:'..spellId, spellId, spellDefMetatable
 	end
-	if key then
-		key = id..':'..key
-		desc = gsub(desc or "", "@NAME", name)
-		descriptions[key] = ucfirst(desc)
+
+	local itemId = tonumber(strmatch(tostring(value), "item:(%d+)"))
+	if itemId then
+		return'item:'..itemId, itemId, itemDefMetatable
 	end
-	Debug("Adding rule for", info,
-		"key:", key,
-		"desc:", desc,
-		"units:", strjoin(",", getkeys(units)),
-		"events:", strjoin(",", getkeys(events)),
-		"handlers:", handlers,
-		"providers:", providers and strjoin(",", unpack(providers)) or "-"
-	)
-	local rule = rules[id]
-	if not rule then
-		rule = { name = name, units = {}, events = {}, handlers = {}, keys = {} }
-		rules[id] = rule
+
+	error(format("Invalid spell or item identifier: %s", tostring(value)), callLevel+1)
+end
+
+local definitions = {}
+
+local function AddRule(ruleKey, desc, spell, units, events, handlers, providers, callLevel)
+	local configKey, id, metatable = ParseValue(spell, (callLevel or 1)+1)
+	
+	if not definitions[configKey] then
+		definitions[configKey] = setmetatable(
+			{
+				configKey = configKey,
+				id = id,
+				providers = prodivers,
+				rules = {}
+			},
+			metatable
+		)
 	end
-	if key then
-		tinsert(rule.keys, key)
-		if not addon.db.profile.rules[key] then
-			return
-		end
-	end
-	MergeSets(rule.units, units)
-	MergeSets(rule.events, events)
-	ConcatLists(rule.handlers, handlers)
+	
+	definitions[configKey][ruleKey] = { units = units, events = events, handlers = handlers, desc = desc }
 end
 
 local function CheckRuleArgs(units, events, handlers, providers, callLevel)
@@ -165,11 +214,6 @@ local function CheckRuleArgs(units, events, handlers, providers, callLevel)
 	return units, events, handlers, providers
 end
 
-local function AddRuleFor(key, desc, spell, units, events, handlers, providers)
-	units, events, handlers, providers = CheckRuleArgs(units, events, handlers, providers, 2)
-	return _AddRuleFor(key, desc, spell, units, events, handlers, providers, 2)
-end
-
 local function Configure(key, desc, spells, units, events, handlers, providers, callLevel)
 	callLevel = callLevel or 1
 	spells = AsList(spells)
@@ -177,15 +221,39 @@ local function Configure(key, desc, spells, units, events, handlers, providers, 
 		error("Empty spell list", callLevel+1)
 	end
 	units, events, handlers, providers = CheckRuleArgs(units, events, handlers, providers, callLevel+1)
-	local builders = {}
 	for i, spell in ipairs(spells) do
-		local spell = spell
-		tinsert(builders, function()
-			_AddRuleFor(key, desc, spell, units, events, handlers, providers, callLevel+1)
-		end)
+		AddRule(key, desc, spell, units, events, handlers, providers)
 	end
-	return #builders == 1 and builders[1] or builders
 end
+
+local function ConfigureDynamic(callback)
+	--addon:RegisterRuleBuilder(callback)
+end
+
+local rules = setmetatable({}, {
+	__index = function(self, key)
+		local def = definitions[key]
+		local result = def and def:GetConfiguration() or false
+		self[key] = result
+		return result
+	end
+})
+
+LibSpellbook.RegisterCallback(rules, 'LibSpellbook_Spell_Added', function(event, id)
+	rules['spell:'..id] = nil
+end)
+
+LibSpellbook.RegisterCallback(rules, 'LibSpellbook_Spell_Removed', function(event, id)
+	rules['spell:'..id] = false
+end)
+
+addon.RegisterMessage(definitions, addon.INITIALIZE_RULES, function()
+	for key, def in pairs(definitions) do
+		def:Initialize()
+	end
+end)
+
+addon.rules = rules
 
 ------------------------------------------------------------------------------
 -- Rule description
@@ -325,13 +393,11 @@ end
 ------------------------------------------------------------------------------
 
 local function Auras(filter, highlight, unit, spells)
-	local funcs = {}
 	local key = BuildKey('Auras', filter, highlight, unit)
 	local desc = BuildDesc(filter, highlight, unit, '@NAME')
 	for i, spell in ipairs(AsList(spells, "number", 2)) do
-		tinsert(funcs, Configure(key, desc, spell, unit,  "UNIT_AURA",  BuildAuraHandler_Single(filter, highlight, unit, spell, 2), 2))
+		Configure(key, desc, spell, unit,  "UNIT_AURA",  BuildAuraHandler_Single(filter, highlight, unit, spell, 2), 2)
 	end
-	return (#funcs > 1) and funcs or funcs[1]
 end
 
 local function PassiveModifier(passive, spell, buff, unit, highlight)
@@ -340,14 +406,14 @@ local function PassiveModifier(passive, spell, buff, unit, highlight)
 	local handler = BuildAuraHandler_Single("HELPFUL PLAYER", highlight, unit, buff, 3)
 	local key = BuildKey("PassiveModifier", passive, spell, buff, unit, highlight)
 	local desc = BuildDesc("HELPFUL PLAYER", highlight, unit, buff)
-	return Configure(key, desc, spell, unit, "UNIT_AURA", handler, passive, 3)
+	Configure(key, desc, spell, unit, "UNIT_AURA", handler, passive, 3)
 end
 
 local function AuraAliases(filter, highlight, unit, spells, buffs)
 	buffs = AsList(buffs or spells, "number", 3)
 	local key = BuildKey("AuraAliases", filter, highlight, unit, spells, buffs)
 	local desc = BuildDesc(filter, highlight, unit, buffs)
-	return Configure(key, desc, spells, unit, "UNIT_AURA", BuildAuraHandler_FirstOf(filter, highlight, unit, buffs, 3), nil, 3)
+	Configure(key, desc, spells, unit, "UNIT_AURA", BuildAuraHandler_FirstOf(filter, highlight, unit, buffs, 3), nil, 3)
 end
 
 local function ShowPower(spells, powerType, handler, highlight, desc)
@@ -424,7 +490,7 @@ local function ShowPower(spells, powerType, handler, highlight, desc)
 	else
 		error("Invalid handler type, expected function, number or nil, got "..type(handler), 3)
 	end
-	return Configure(key, desc, spells, "player", { "UNIT_POWER", "UNIT_POWER_MAX" }, actualHandler, nil, 3)
+	Configure(key, desc, spells, "player", { "UNIT_POWER", "UNIT_POWER_MAX" }, actualHandler, nil, 3)
 end
 
 local function FilterOut(spells, exclude)
@@ -476,10 +542,9 @@ do
 				local key = BuildKey('LibPlayerSpell', provider, modified, filter, highlight, token, buff)
 				local desc = BuildDesc(filter, highlight, token, buff).." ["..DescribeLPSSource(category).."]"
 				local handler = BuildAuraHandler_Longest(filter, highlight, token, buff, 3)
-				tinsert(builders, Configure(key, desc, spells, token, "UNIT_AURA", handler, provider, 3))
+				Configure(key, desc, spells, token, "UNIT_AURA", handler, provider, 3)
 			end
 		end
-		return (#builders > 1) and builders or builders[1]
 	end
 end
 
@@ -502,7 +567,7 @@ local baseEnv = {
 	PLAYER_CLASS = PLAYER_CLASS,
 
 	-- Intended to be used un Lua
-	AddRuleFor               = AddRuleFor,
+	ConfigureDynamic         = ConfigureDynamic,
 	BuildAuraHandler_Single  = BuildAuraHandler_Single,
 	BuildAuraHandler_Longest = BuildAuraHandler_Longest,
 	BuildAuraHandler_FirstOf = BuildAuraHandler_FirstOf,
@@ -524,45 +589,45 @@ local baseEnv = {
 
 	-- High-level functions
 	SimpleDebuffs = function(spells)
-		return Auras("HARMFUL PLAYER", "bad", "enemy", spells)
+		Auras("HARMFUL PLAYER", "bad", "enemy", spells)
 	end,
 
 	SharedSimpleDebuffs = function(spells)
-		return Auras("HARMFUL", "bad", "enemy", spells)
+		Auras("HARMFUL", "bad", "enemy", spells)
 	end,
 
 	SimpleBuffs = function(spells)
-		return Auras("HELPFUL PLAYER", "good", "ally", spells)
+		Auras("HELPFUL PLAYER", "good", "ally", spells)
 	end,
 
 	SharedSimpleBuffs = function(spells)
-		return Auras("HELPFUL", "good", "ally", spells)
+		Auras("HELPFUL", "good", "ally", spells)
 	end,
 
 	LongestDebuffOf = function(spells, buffs)
 		local key = BuildKey('LongestDebuffOf', spells, buffs)
 		local desc =  BuildDesc("HARMFUL", "bad", "enemy", buffs)
-		return Configure(key, desc, spells, "enemy", "UNIT_AURA", BuildAuraHandler_Longest("HARMFUL", "bad", "enemy", buffs or spells, 2), nil, 2)
+		Configure(key, desc, spells, "enemy", "UNIT_AURA", BuildAuraHandler_Longest("HARMFUL", "bad", "enemy", buffs or spells, 2), nil, 2)
 	end,
 
 	SelfBuffs = function(spells)
-		return Auras("HELPFUL PLAYER", "good", "player", spells)
+		Auras("HELPFUL PLAYER", "good", "player", spells)
 	end,
 
 	PetBuffs = function(spells)
-		return Auras("HELPFUL PLAYER", "good", "pet", spells)
+		Auras("HELPFUL PLAYER", "good", "pet", spells)
 	end,
 
 	BuffAliases = function(args)
-		return AuraAliases("HELPFUL PLAYER", "good", "ally", unpack(args))
+		AuraAliases("HELPFUL PLAYER", "good", "ally", unpack(args))
 	end,
 
 	DebuffAliases = function(args)
-		return AuraAliases("HARMFUL PLAYER", "bad", "enemy", unpack(args))
+		AuraAliases("HARMFUL PLAYER", "bad", "enemy", unpack(args))
 	end,
 
 	SelfBuffAliases = function(args)
-		return AuraAliases("HELPFUL PLAYER", "good", "player", unpack(args))
+		AuraAliases("HELPFUL PLAYER", "good", "player", unpack(args))
 	end,
 }
 for name, func in pairs(addon.AuraTools) do

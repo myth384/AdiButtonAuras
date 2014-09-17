@@ -26,6 +26,7 @@ function private.GetSpellOptions(addon, addonName)
 	local L = addon.L
 
 	local rules = addon.rules
+	local items = addon.items
 	local descriptions = addon.descriptions
 
 	local AceConfigRegistry = addon.GetLib('AceConfigRegistry-3.0')
@@ -49,7 +50,8 @@ function private.GetSpellOptions(addon, addonName)
 	end
 
 	function handler:GetRule()
-		return self.current and rules[self.current]
+		if not self.current then return end
+		local rule = rules[self.current] or items[self.current]
 	end
 
 	function handler:GetCurrentName()
@@ -104,10 +106,20 @@ function private.GetSpellOptions(addon, addonName)
 	local overlayPrototype = setmetatable({}, { __index = CreateFrame("Button") })
 	local overlayMeta = { __index = overlayPrototype }
 
+	local statusColors = {
+		enabled     = { 0.0, 1.0, 0.0 },
+		disabled    = { 1.0, 0.0, 0.0 },
+		unsupported = { 0.8, 0.4, 0.0 },
+		unknown     = { 0.5, 0.5, 0.5 },
+		empty       = { 0.0, 0.0, 0.0 },
+		hidden      = { 0.0, 0.0, 0.0 }
+	}
+
 	local backdrop = {
 		bgFile = [[Interface\Tooltips\UI-Tooltip-Background]], tile = true, tileSize = 16,
 		insets = { left = 0, right = 0, top = 0, bottom = 0 }
 	}
+	
 
 	function overlayPrototype:Initialize(overlay)
 		self:Hide()
@@ -141,31 +153,16 @@ function private.GetSpellOptions(addon, addonName)
 	end
 
 	function overlayPrototype:Update()
-		local type_, id = self.overlay.actionType, self.overlay.actionId
-		self.conf, self.enabled, self.key = addon:GetActionConfiguration(type_, id)
-		if type_ == "spell" then
-			self.name = GetSpellInfo(id)
-		elseif type_ == "item" then
-			type_ = GetItemInfo(id)
-		end
-		if self.conf then
-			if self.enabled then
-				self:SetBackdropColor(0, 1, 0, 0.8)
-			else
-				self:SetBackdropColor(1, 0, 0, 0.8)
-			end
-		elseif type_ == "unsupported" then
-			self:SetBackdropColor(1, 0.8, 0.4, 0)
-		else
-			self:SetBackdropColor(0, 0, 0, 0.8)
-		end
+		self.status, self.rule, self.key = addon:GetActionConfiguration(self.overlay.actionType, self.overlay.actionId, true)
+		local r, g, b = unpack(statusColors[self.status])
+		self:SetBackdropColor(r, g, b, 0.8)
 		if GameTooltip:GetOwner() == self then
 			self:OnEnter()
 		end
 	end
 
 	function overlayPrototype:OnClick()
-		if not self.conf then
+		if not self.rule then
 			return
 		end
 		if IsShiftKeyDown() then
@@ -178,19 +175,28 @@ function private.GetSpellOptions(addon, addonName)
 
 	function overlayPrototype:OnEnter()
 		local type_, id = self.overlay.actionType, self.overlay.actionId
-		GameTooltip_SetDefaultAnchor(GameTooltip, self)
-		GameTooltip:AddDoubleLine(self.name or "???", type_ and L[type_]) -- L['item'] L['spell'] L['unsupported']
-		if self.conf then
-			if self.enabled then
-				GameTooltip:AddDoubleLine(L['Status'], L['Enabled'], nil, nil, nil, 0, 1, 0)
-			else
-				GameTooltip:AddDoubleLine(L['Status'], L['Disabled'], nil, nil, nil, 1, 0, 0)
+		local status, rule = self.status, self.rule
+		
+		local name = rule and rule.name
+		if not name then
+			if type_ == "item" then
+				name = GetItemInfo(id)
+			elseif type_ == "spell" then
+				name = GetSpellInfo(id)
 			end
-			if self.conf.keys then
+		end
+		
+		GameTooltip_SetDefaultAnchor(GameTooltip, self)
+		GameTooltip:AddDoubleLine(name or "???", type_ and L[type_]) -- L['item'] L['spell']
+		local r, g, b = unpack(statusColors[status])
+		GameTooltip:AddDoubleLine(L['Status'], L[status], nil, nil, nil, r, g, b)
+		
+		if rule then
+			if rule.keys then
 				GameTooltip:AddLine(L['Rules:'])
-				for i, key in ipairs(self.conf.keys) do
-					local enabled = addon.db.profile.rules[key]
-					GameTooltip:AddLine(wrap("- "..descriptions[key], 30), enabled and 0 or 1, enabled and 1 or 0, 0)
+				for i, ruleKey in ipairs(rule.keys) do
+					local enabled = addon.db.profile.rules[ruleKey]
+					GameTooltip:AddLine(wrap("- "..descriptions[ruleKey], 30), enabled and 0 or 1, enabled and 1 or 0, 0)
 				end
 			end
 			GameTooltip:AddLine(L['Shift+click to toggle.'])
@@ -199,22 +205,20 @@ function private.GetSpellOptions(addon, addonName)
 			GameTooltip:AddDoubleLine("Key", self.key, nil, nil, nil, 1, 1, 1)
 			GameTooltip:AddDoubleLine("Id", self.id, nil, nil, nil, 1, 1, 1)
 			local title = "Units"
-			for unit in pairs(self.conf.units) do
+			for unit in pairs(rule.units) do
 				GameTooltip:AddDoubleLine(title, unit, nil, nil, nil, 1, 1, 1)
 				title = " "
 			end
 			title = "Events"
-			for event in pairs(self.conf.events) do
+			for event in pairs(rule.events) do
 				GameTooltip:AddDoubleLine(title, event, nil, nil, nil, 1, 1, 1)
 				title = " "
 			end
-			GameTooltip:AddDoubleLine('Handlers', #(self.conf.handlers), nil, nil, nil, 1, 1, 1)
+			GameTooltip:AddDoubleLine('Handlers', #(rule.handlers), nil, nil, nil, 1, 1, 1)
 			--@end-debug@
-		elseif type_ == 'unsupported' then
-			GameTooltip:AddDoubleLine(L['Status'], L['unsupported'], nil, nil, nil, 0.8, 0.4, 0.0)
+		elseif status == "unsupported" then
 			GameTooltip:AddLine(L['AdiButtonAuras cannot handle this button.'], 0.8, 0.4, 0.0)
-		else
-			GameTooltip:AddDoubleLine(L['Status'], UNKNOWN, nil, nil, nil, 0.5, 0.5, 0.5)
+		elseif status == "unknown" then
 			GameTooltip:AddLine(format(L['AdiButtonAuras has no rules for this %s.'], type_ and L[type_] or L["button"]), 0.5, 0.5, 0.5)
 			if self.key then
 				GameTooltip:AddDoubleLine(L["Action 'key' for reference"], self.key, nil, nil, nil, 1, 1, 1)

@@ -25,35 +25,36 @@ if not addon.isClass("DEATHKNIGHT") then return end
 
 AdiButtonAuras:RegisterRules(function()
 	Debug('Adding deathknight rules')
-	return {
-		ImportPlayerSpells {
-		-- Import all spells for ...
-			"DEATHKNIGHT",
-		-- ... but ...
-			115635, -- Death Barrier
-			114851, -- Blood Charge
-			 50421, -- Scent of Blood
-			 81141, -- Crimson Scourge
-			 51124, -- Killing Machine
-			 59052, -- Freezing Fog
-			 81340, -- Sudden Doom
-			 91342, -- Shadow Infusion
-		},
-		Configure {
-			"Soul Reaper",
-			L["Shows Hint when target is below 35% health."],
-			{
-				114866, -- Soul Reaper (Blood)
-				130735, -- Soul Reaper (Frost)
-				130736, -- Soul Reaper (Unholly)
-			},
-			"enemy",
-			{ "UNIT_HEALTH", "UNIT_HEALTH_MAX" },
-			function(units, model)
-				if UnitHealth(units.enemy) / UnitHealthMax(units.enemy) < 0.35 then
-					model.hint = true
-				end
-			end,
-		}
+
+	ImportPlayerSpells {
+	-- Import all spells for ...
+		"DEATHKNIGHT",
+	-- ... but ...
+		115635, -- Death Barrier
+		114851, -- Blood Charge
+		 50421, -- Scent of Blood
+		 81141, -- Crimson Scourge
+		 51124, -- Killing Machine
+		 59052, -- Freezing Fog
+		 81340, -- Sudden Doom
+		 91342, -- Shadow Infusion
 	}
+
+	Configure {
+		"Soul Reaper",
+		L["Shows Hint when target is below 35% health."],
+		{
+			114866, -- Soul Reaper (Blood)
+			130735, -- Soul Reaper (Frost)
+			130736, -- Soul Reaper (Unholly)
+		},
+		"enemy",
+		{ "UNIT_HEALTH", "UNIT_HEALTH_MAX" },
+		function(units, model)
+			if UnitHealth(units.enemy) / UnitHealthMax(units.enemy) < 0.35 then
+				model.hint = true
+			end
+		end,
+	}
+
 end)

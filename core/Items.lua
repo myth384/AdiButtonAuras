@@ -26,7 +26,7 @@ local LibItemBuffs, LIBVer = addon.GetLib('LibItemBuffs-1.0')
 local BuildKey = addon.BuildKey
 local BuildDesc = addon.BuildDesc
 
-local descriptions = {}
+local descriptions = addon.descriptions
 
 local function GetItemTargetFilterAndHighlight(itemId)
 	if IsHarmfulItem(itemId) then
@@ -92,10 +92,7 @@ local function BuildItemRule(itemId, buffName, ...)
 	return rule
 end
 
-local items = addon.Memoize(function(key)
+addon.items = addon.Memoize(function(key)
 	local id = tonumber(key:match('^item:(%d+)$'))
 	return id and BuildItemRule(id, GetItemSpell(id), LibItemBuffs:GetItemBuffs(id)) or false
 end)
-
-setmetatable(addon.rules, { __index = items })
-setmetatable(addon.descriptions, {  __index = descriptions })

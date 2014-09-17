@@ -25,5 +25,6 @@ if not addon.isClass("MAGE") then return end
 
 AdiButtonAuras:RegisterRules(function()
 	Debug('Adding mage rules')
-	return ImportPlayerSpells { "MAGE" }
+
+	ImportPlayerSpells { "MAGE" }
 end)

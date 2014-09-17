@@ -25,54 +25,55 @@ if not addon.isClass("PRIEST") then return end
 
 AdiButtonAuras:RegisterRules(function()
 	Debug('Adding priest rules')
-	return {
-		ImportPlayerSpells {
-			-- Import all spells for ...
-			"PRIEST",
-			-- ... but ...
-			   17, -- Power Word: Shield
-			81661, -- Evangelism
-		},
-		ShowPower {
-			{
-				 2944, -- Devouring Plague
-				64044, -- Psychic Horror
-			},
-			"SHADOW_ORBS",
-		},
-		Configure {
-			"PWShield",
-			L["Show Power Word: Shield or Weakened Soul on targeted ally."],
-			17, -- Power Word: Shield
-			"ally",
-			"UNIT_AURA",
-			(function()
-				local hasPWShield = BuildAuraHandler_Single("HELPFUL", "good", "ally", 17)
-				local hasWeakenedSoul = BuildAuraHandler_Single("HARMFUL", "bad", "ally", 6788)
-				return function(units, model)
-					return hasPWShield(units, model) or hasWeakenedSoul(units, model)
-				end
-			end)(),
-		},
-		Configure {
-			"Archangel",
-			BuildDesc("HELPFUL PLAYER", nil, "player", 81662),
-			81700, -- Archangel
-			"player",
-			"UNIT_AURA",
-			(function()
-				local hasEvangelism = BuildAuraHandler_Single("HELPFUL PLAYER", nil, "player", 81661) -- Evangelism (buff)
-				local proxy = {} -- Local model
-				return function(units, model)
-					if hasEvangelism(units, proxy) then
-						model.count = proxy.count
-						if proxy.expiration - GetTime() < 5 then
-							model.hint = true
-						end
-					end
-				end
-			end)(),
-			81662, -- Evangelism
-		},
+
+	ImportPlayerSpells {
+		-- Import all spells for ...
+		"PRIEST",
+		-- ... but ...
+		   17, -- Power Word: Shield
+		81661, -- Evangelism
 	}
+
+	ShowPower {
+		{
+			 2944, -- Devouring Plague
+			64044, -- Psychic Horror
+		},
+		"SHADOW_ORBS",
+	}
+
+	local hasPWShield = BuildAuraHandler_Single("HELPFUL", "good", "ally", 17)
+	local hasWeakenedSoul = BuildAuraHandler_Single("HARMFUL", "bad", "ally", 6788)
+
+	Configure {
+		"PWShield",
+		L["Show Power Word: Shield or Weakened Soul on targeted ally."],
+		17, -- Power Word: Shield
+		"ally",
+		"UNIT_AURA",
+		function(units, model)
+			return hasPWShield(units, model) or hasWeakenedSoul(units, model)
+		end
+	}
+
+	local hasEvangelism = BuildAuraHandler_Single("HELPFUL PLAYER", nil, "player", 81661) -- Evangelism (buff)
+	local proxy = {} -- Local model
+
+	Configure {
+		"Archangel",
+		BuildDesc("HELPFUL PLAYER", nil, "player", 81662),
+		81700, -- Archangel
+		"player",
+		"UNIT_AURA",
+		function(units, model)
+			if hasEvangelism(units, proxy) then
+				model.count = proxy.count
+				if proxy.expiration - GetTime() < 5 then
+					model.hint = true
+				end
+			end
+		end,
+		81662, -- Evangelism
+	}
+
 end)

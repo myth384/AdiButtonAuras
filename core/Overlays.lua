@@ -251,10 +251,7 @@ function overlayPrototype:UpdateAction(event)
 end
 
 function overlayPrototype:SetAction(event, actionType, actionId, macroConditionals)
-	local conf, enabled, spellId = addon:GetActionConfiguration(actionType, actionId)
-	if not enabled then
-		conf = nil
-	end
+	local status, conf, spellId = addon:GetActionConfiguration(actionType, actionId)
 
 	if self.spellId == spellId and self.conf == conf and self.macroConditionals == macroConditionals then return end
 	self.actionType, self.actionId = actionType, actionId
