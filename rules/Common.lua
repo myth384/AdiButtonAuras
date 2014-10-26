@@ -22,79 +22,77 @@ along with AdiButtonAuras.  If not, see <http://www.gnu.org/licenses/>.
 AdiButtonAuras:RegisterRules(function()
 	Debug('Adding common rules')
 
-	local rules = {
 	--------------------------------------------------------------------------
 	-- Snares and anti-snares
 	--------------------------------------------------------------------------
 	-- Note that some of these are talent procs or passive effects.
 	-- This is intended as they will show up on active spells anyway.
 
-		LongestDebuffOf {
-			{
-				  1604, -- Dazed (common),
-				 45524, -- Chains of Ice (death knight)
-				 50259, -- Dazed (feral charge effect)
-				 58180, -- Infected Wounds (druid)
-				 61391, -- Typhoon (druid)
-				  5116, -- Concussive Shot (hunter)
-				 13810, -- Ice Trap (hunter)
-				 35346, -- Time Warp (hunter, warp Stalker)
-				 54644, -- Frost Breath (hunter, chimaera)
-				 61394, -- Frozen Wake (hunter, glyph)
-				 31589, -- Slow (mage)
-				 44614, -- Frostfire Bolt (mage)
-				   116, -- Frostbolt (mage)
-				   120, -- Cone of Cold (mage)
-				  6136, -- Chilled (mage)
-				  7321, -- Chilled (mage, bis)
-				116095, -- Disable (monk, 1 stack)
-				  1044, -- Hand of Freedom (paladin)
-				  3409, -- Crippling Poison (rogue)
-				 26679, -- Deadly Throw (rogue)
-				  3600, -- Earthbind (shaman)
-				  8056, -- Frost Shock (shaman)
-				  8178, -- Grounding Totem Effect (shaman)
-				 17962, -- Conflagrate (warlock)
-				  1715, -- Piercing Howl (warrior)
-				 12323  -- Hamstring (warrior)
-			}
-		}, -- Snares and anti-snares
+	LongestDebuffOf {
+		{
+			  1604, -- Dazed (common),
+			 45524, -- Chains of Ice (death knight)
+			 50259, -- Dazed (feral charge effect)
+			 58180, -- Infected Wounds (druid)
+			 61391, -- Typhoon (druid)
+			  5116, -- Concussive Shot (hunter)
+			 13810, -- Ice Trap (hunter)
+			 35346, -- Time Warp (hunter, warp Stalker)
+			 54644, -- Frost Breath (hunter, chimaera)
+			 61394, -- Frozen Wake (hunter, glyph)
+			 31589, -- Slow (mage)
+			 44614, -- Frostfire Bolt (mage)
+			   116, -- Frostbolt (mage)
+			   120, -- Cone of Cold (mage)
+			  6136, -- Chilled (mage)
+			  7321, -- Chilled (mage, bis)
+			116095, -- Disable (monk, 1 stack)
+			  1044, -- Hand of Freedom (paladin)
+			  3409, -- Crippling Poison (rogue)
+			 26679, -- Deadly Throw (rogue)
+			  3600, -- Earthbind (shaman)
+			  8056, -- Frost Shock (shaman)
+			  8178, -- Grounding Totem Effect (shaman)
+			 17962, -- Conflagrate (warlock)
+			  1715, -- Piercing Howl (warrior)
+			 12323  -- Hamstring (warrior)
+		}
+	} -- Snares and anti-snares
 
 	--------------------------------------------------------------------------
 	-- Bloodlust & al
 	--------------------------------------------------------------------------
 
-		Configure {
-			"bloodlust",
-			L["Show when @NAME or an equivalent haste buff is found on yourself."],
-			{
-				 2825, -- Bloodlust (Horde shaman)
-				32182, -- Heroism (Alliance shaman)
-				80353, -- Time Warp (mage)
-				90355, -- Ancient Hysteria (hunter exotic pet ability)
-				"item:102351", -- Drums of Rage
-			},
-			"ally",
-			"UNIT_AURA",
-			(function()
-				local hasBloodlust = BuildAuraHandler_Longest("HELPFUL", "good", "ally",{
-					  2825, -- Bloodlust (Horde shaman)
-					 32182, -- Heroism (Alliance shaman)
-					 80353, -- Time Warp (mage)
-					 90355, -- Ancient Hysteria (hunter exotic pet ability)
-					146555, -- Drums of Rage
-				})
-				local isSated = BuildAuraHandler_Longest("HARMFUL", "bad", "ally", {
-					 57723, -- Exhaustion (Drums of Rage debuff)
-					 57724, -- Sated (Bloodlst/Heroism debuff),
-					 80354, -- Temporal Displacement (Time Warp debuff)
-					 95809  -- Insanity (Ancient Hysteria debuff)
-				})
-				return function(units, model)
-					return hasBloodlust(units, model) or isSated(units, model)
-				end
-			end)(),
+	Configure {
+		"bloodlust",
+		L["Show when @NAME or an equivalent haste buff is found on yourself."],
+		{
+			 2825, -- Bloodlust (Horde shaman)
+			32182, -- Heroism (Alliance shaman)
+			80353, -- Time Warp (mage)
+			90355, -- Ancient Hysteria (hunter exotic pet ability)
+			"item:102351", -- Drums of Rage
 		},
+		"ally",
+		"UNIT_AURA",
+		(function()
+			local hasBloodlust = BuildAuraHandler_Longest("HELPFUL", "good", "ally",{
+				  2825, -- Bloodlust (Horde shaman)
+				 32182, -- Heroism (Alliance shaman)
+				 80353, -- Time Warp (mage)
+				 90355, -- Ancient Hysteria (hunter exotic pet ability)
+				146555, -- Drums of Rage
+			})
+			local isSated = BuildAuraHandler_Longest("HARMFUL", "bad", "ally", {
+				 57723, -- Exhaustion (Drums of Rage debuff)
+				 57724, -- Sated (Bloodlst/Heroism debuff),
+				 80354, -- Temporal Displacement (Time Warp debuff)
+				 95809  -- Insanity (Ancient Hysteria debuff)
+			})
+			return function(units, model)
+				return hasBloodlust(units, model) or isSated(units, model)
+			end
+		end)(),
 	}
 
 	--------------------------------------------------------------------------
@@ -102,6 +100,7 @@ AdiButtonAuras:RegisterRules(function()
 	--------------------------------------------------------------------------
 	-- Use DRData, grouped by DR categories
 
+	--[=[
 	local DRData, DRVer = GetLib("DRData-1.0")
 	local LibSpellbook, LSBVer = GetLib('LibSpellbook-1.0')
 	local source = format(" [DR-%d,LSB-%d]", DRVer, LSBVer)
@@ -133,6 +132,7 @@ AdiButtonAuras:RegisterRules(function()
 			end)
 		end
 	end
+	--]=]
 
 	--------------------------------------------------------------------------
 	-- Raid buffs
@@ -174,7 +174,7 @@ AdiButtonAuras:RegisterRules(function()
 			return found == buffMask, minExpiration
 		end
 
-		tinsert(rules, Configure {
+		Configure {
 			"Raidbuff:"..buffMask,
 			L["Track @NAME or equivalent raid buffs on all group members. Indicate the duration of the shortest buff and the number of missing buffs."].." [LPS]",
 			buffSpells[buffMask],
@@ -199,7 +199,7 @@ AdiButtonAuras:RegisterRules(function()
 					model.count = missing
 				end
 			end
-		})
+		}
 	end
 
 	--------------------------------------------------------------------------
@@ -212,7 +212,7 @@ AdiButtonAuras:RegisterRules(function()
 	for spell, flags, _, _, _, category in LibPlayerSpells:IterateSpells("DISPEL", PLAYER_CLASS) do
 		local offensive = band(flags, HELPFUL) == 0
 		local spell, token = spell, offensive and "enemy" or "ally"
-		tinsert(rules, Configure {
+		Configure {
 			"Dispel",
 			(offensive
 				and BuildDesc(L["a buff you can dispel"], "good", "enemy")
@@ -231,7 +231,7 @@ AdiButtonAuras:RegisterRules(function()
 					end
 				end
 			end
-		})
+		}
 	end
 
 	--------------------------------------------------------------------------
@@ -245,7 +245,7 @@ AdiButtonAuras:RegisterRules(function()
 	end
 	if #interrupts > 0 then
 		local source = DescribeLPSSource(PLAYER_CLASS)
-		tinsert(rules, Configure {
+		Configure {
 			"Interrupt",
 			format(L["%s when %s is casting/channelling a spell that you can interrupt."].." [%s]",
 				DescribeHighlight("flash"),
@@ -278,14 +278,12 @@ AdiButtonAuras:RegisterRules(function()
 					end
 				end
 			end
-		})
+		}
 	end
 
 	--------------------------------------------------------------------------
 	-- Racials & tradeskills
 	--------------------------------------------------------------------------
 
-	tinsert(rules, ImportPlayerSpells { "RACIAL" })
-
-	return rules
+	ImportPlayerSpells { "RACIAL" }
 end)
