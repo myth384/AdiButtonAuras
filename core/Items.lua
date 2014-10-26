@@ -26,8 +26,6 @@ local LibItemBuffs, LIBVer = addon.GetLib('LibItemBuffs-1.0')
 local BuildKey = addon.BuildKey
 local BuildDesc = addon.BuildDesc
 
-local descriptions = {}
-
 local function GetItemTargetFilterAndHighlight(itemId)
 	if IsHarmfulItem(itemId) then
 		return "enemy", "HARMFUL PLAYER", "bad"
@@ -59,18 +57,13 @@ local function BuildBuffNameHandler(key, token, filter, highlight, buffName)
 	end
 end
 
-local function BuildItemRule(itemId, buffName, ...)
-	if not buffName and not ... then return false end
+local function BuildItemRule(rule, descriptions, itemId, buffName, ...)
+	if not buffName and not ... then return end
 
 	local token, filter, highlight = GetItemTargetFilterAndHighlight(itemId)
 
-	local rule = {
-		units = { [token] = true },
-		events = { UNIT_AURA = true },
-		handlers = {},
-		keys = {},
-		name = GetItemInfo(itemId)
-	}
+	rule.units[token] = true
+	rule.events.UNIT_AURA = true
 
 	if ... then
 		for i = 1, select('#', ...) do
@@ -86,16 +79,13 @@ local function BuildItemRule(itemId, buffName, ...)
 		local desc = BuildDesc(filter, highlight, token, buffName)
 		descriptions[key] = desc
 		tinsert(rule.keys, key)
-		tinsert(rule.handlers, BuildBuffIdHandler(key, token, filter, highlight, buffName))
+		tinsert(rule.handlers, BuildBuffNameHandler(key, token, filter, highlight, buffName))
 	end
 
 	return rule
 end
 
-local items = addon.Memoize(function(key)
-	local id = tonumber(key:match('^item:(%d+)$'))
-	return id and BuildItemRule(id, GetItemSpell(id), LibItemBuffs:GetItemBuffs(id)) or false
+addon:RegisterMessage('AdiButtonAuras_BuildRule', function(type, id, rule, descriptions)
+	if type ~= "item" then return end
+	BuildItemRule(rule, descriptions, id, GetItemSpell(id), LibItemBuffs:GetItemBuffs(id))
 end)
-
-setmetatable(addon.rules, { __index = items })
-setmetatable(addon.descriptions, {  __index = descriptions })
