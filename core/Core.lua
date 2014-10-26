@@ -320,57 +320,41 @@ function addon:OnProfileChanged()
 end
 
 ------------------------------------------------------------------------------
--- Rule loading and updating
+-- Rule building
 ------------------------------------------------------------------------------
 
-local builders
-local initializers = {}
-
 local rules, descriptions = {}, {}
-addon.rules = rules
-addon.descriptions = descriptions
 
-local function errorhandler(msg)
-	addon:Debug('|cffff0000'..tostring(msg)..'|r')
-	return geterrorhandler()(msg)
-end
+-- Add an __index operation that let callbacks build the rule on demand
+setmetatable(rules, {
+	__index = function(self, key)
+		if not key then return end
 
-local function GetBuilders(event)
-	if not builders then
-		addon:Debug('Initializing rules', event)
-		if #initializers == 0 then
-			error("No rules registered !", 2)
-		end
-		local t = {}
-		for i, initializer in ipairs(initializers) do
-			local ok, result = xpcall(initializer, errorhandler)
-			if ok and result then
-				tinsert(t, result)
+		local type, id = strsplit(key, ':')
+		id = tonumber(id)
+
+		-- Build an empty rule and let the callbacks fill it
+		local rule = { units = {}, events = {}, handlers = {}, keys = {} }
+		addon:SendMessage('AdiButtonAuras_BuildRule', type, id, rule, descriptions, key)
+
+		if next(rule.units) and next(rule.events) and next(rule.handlers) then
+			if not rule.name then
+				rule.name = type == 'item' and GetItemInfo(id) or GetSpellInfo(id)
 			end
+		else
+			rule = false
 		end
-		builders = addon.AsList(t, "function")
-		addon:Debug(#builders, 'builders found')
+
+		self[key] = rule
+		return rule
 	end
-	return builders
-end
+})
 
 function addon:LibSpellbook_Spells_Changed(event)
 	self:Debug(event)
 	wipe(rules)
 	wipe(descriptions)
-	for _, builder in ipairs(GetBuilders(event)) do
-		xpcall(builder, errorhandler)
-	end
 	self:SendMessage(RULES_UPDATED)
-end
-
-function addon.api:RegisterRules(initializer)
-	tinsert(initializers, addon.Restricted(initializer))
-	if builders then
-		addon:Debug('Rebuilding rules')
-		builders = nil
-		return addon:LibSpellbook_Spells_Changed('RegisterRules')
-	end
 end
 
 function addon:GetActionConfiguration(actionType, actionId)
