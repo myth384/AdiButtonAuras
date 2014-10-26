@@ -57,10 +57,10 @@ local function BuildBuffNameHandler(key, token, filter, highlight, buffName)
 	end
 end
 
-local function BuildItemRule(rule, descriptions, itemId, buffName, ...)
+local function BuildItemRule(rule, buffName, ...)
 	if not buffName and not ... then return end
 
-	local token, filter, highlight = GetItemTargetFilterAndHighlight(itemId)
+	local token, filter, highlight = GetItemTargetFilterAndHighlight(rule.id)
 
 	rule.units[token] = true
 	rule.events.UNIT_AURA = true
@@ -68,16 +68,16 @@ local function BuildItemRule(rule, descriptions, itemId, buffName, ...)
 	if ... then
 		for i = 1, select('#', ...) do
 			local buffId = select(i, ...)
-			local key = BuildKey('item', itemId, token, filter, highlight, buffId)
+			local key = BuildKey('item', rule.id, token, filter, highlight, buffId)
 			local desc = BuildDesc(filter, highlight, token, buffId) .. format(" [LIB-%d-%s]", LIBVer, LibItemBuffs:GetDatabaseVersion())
-			descriptions[key] = desc
+			rule.descriptions[key] = desc
 			tinsert(rule.keys, key)
 			tinsert(rule.handlers, BuildBuffIdHandler(key, token, filter, highlight, buffId))
 		end
 	elseif buffName then
-		local key = BuildKey('item', itemId, token, filter, highlight, buffName)
+		local key = BuildKey('item', rule.id, token, filter, highlight, buffName)
 		local desc = BuildDesc(filter, highlight, token, buffName)
-		descriptions[key] = desc
+		rule.descriptions[key] = desc
 		tinsert(rule.keys, key)
 		tinsert(rule.handlers, BuildBuffNameHandler(key, token, filter, highlight, buffName))
 	end
@@ -85,7 +85,7 @@ local function BuildItemRule(rule, descriptions, itemId, buffName, ...)
 	return rule
 end
 
-addon:RegisterMessage('AdiButtonAuras_BuildRule', function(type, id, rule, descriptions)
-	if type ~= "item" then return end
-	BuildItemRule(rule, descriptions, id, GetItemSpell(id), LibItemBuffs:GetItemBuffs(id))
+addon.RegisterMessage('Items', 'AdiButtonAuras_BuildRule', function(_, rule)
+	if rule.type ~= "item" then return end
+	BuildItemRule(rule, GetItemSpell(rule.id), LibItemBuffs:GetItemBuffs(rule.id))
 end)
