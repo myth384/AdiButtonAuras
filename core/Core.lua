@@ -330,18 +330,24 @@ setmetatable(rules, {
 	__index = function(self, key)
 		if not key then return end
 
-		local type, id = strsplit(key, ':')
+		local type_, id = strsplit(':', key)
 		id = tonumber(id)
 
 		-- Build an empty rule and let the callbacks fill it
-		local rule = { units = {}, events = {}, handlers = {}, keys = {} }
-		addon:SendMessage('AdiButtonAuras_BuildRule', type, id, rule, descriptions, key)
+		local rule = {
+			id = id,
+			type = type_,
+			key = key,
+			name = (type_ == 'item' and GetItemInfo(id) or GetSpellInfo(id)),
+			units = {},
+			events = {},
+			handlers = {},
+			keys = {},
+			descriptions = descriptions,
+		}
+		addon:SendMessage('AdiButtonAuras_BuildRule', rule)
 
-		if next(rule.units) and next(rule.events) and next(rule.handlers) then
-			if not rule.name then
-				rule.name = type == 'item' and GetItemInfo(id) or GetSpellInfo(id)
-			end
-		else
+		if #(rule.keys) == 0 then
 			rule = false
 		end
 
@@ -349,6 +355,10 @@ setmetatable(rules, {
 		return rule
 	end
 })
+
+function addon:GetRule(key)
+	return rules[key] or nil
+end
 
 function addon:LibSpellbook_Spells_Changed(event)
 	self:Debug(event)
