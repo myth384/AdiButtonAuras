@@ -25,9 +25,6 @@ function private.GetSpellOptions(addon, addonName)
 
 	local L = addon.L
 
-	local rules = addon.rules
-	local descriptions = addon.descriptions
-
 	local AceConfigRegistry = addon.GetLib('AceConfigRegistry-3.0')
 
 	local function wrap(str, width)
@@ -49,7 +46,7 @@ function private.GetSpellOptions(addon, addonName)
 	end
 
 	function handler:GetRule()
-		return self.current and rules[self.current]
+		return self.current and addon:GetRule(self.current)
 	end
 
 	function handler:GetCurrentName()
@@ -86,8 +83,9 @@ function private.GetSpellOptions(addon, addonName)
 	local t = {}
 	function handler:GetRuleList(_, index, flag)
 		wipe(t)
-		for i, key in ipairs(self:GetRule().keys) do
-			t[i] = descriptions[key]
+		local rule = self:GetRule()
+		for i, key in ipairs(rule.keys) do
+			t[i] = rule.descriptions[key]
 		end
 		return t
 	end
@@ -190,7 +188,7 @@ function private.GetSpellOptions(addon, addonName)
 				GameTooltip:AddLine(L['Rules:'])
 				for i, key in ipairs(self.conf.keys) do
 					local enabled = addon.db.profile.rules[key]
-					GameTooltip:AddLine(wrap("- "..descriptions[key], 30), enabled and 0 or 1, enabled and 1 or 0, 0)
+					GameTooltip:AddLine(wrap("- "..self.conf.descriptions[key], 30), enabled and 0 or 1, enabled and 1 or 0, 0)
 				end
 			end
 			GameTooltip:AddLine(L['Shift+click to toggle.'])
