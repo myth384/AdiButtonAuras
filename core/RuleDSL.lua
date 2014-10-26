@@ -82,71 +82,14 @@ local function Debug(...) return addon.Debug('|cffffff00Rules:|r', ...) end
 -- Rule creation
 ------------------------------------------------------------------------------
 
-local function SpellOrItemId(value, callLevel)
-	local spellId = tonumber(type(value) == "string" and strmatch(value, "spell:(%d+)") or value)
-	if spellId then
-		local name = GetSpellInfo(spellId)
-		if not name then
-			error(format("Invalid spell identifier: %s", tostring(value)), callLevel+1)
-		end
-		return format("spell:%d", spellId), "spell "..(GetSpellLink(spellId) or spellId), name, "spell", spellId
-	end
-	local itemId = tonumber(strmatch(tostring(value), "item:(%d+)"))
-	if itemId then
-		local name, link = GetItemInfo(itemId)
-		return format("item:%d", itemId), link and ("item "..tostring(link)) or value, name or value, "item"
-	end
-	error(format("Invalid spell or item identifier: %s", tostring(value)), callLevel+1)
-end
+local builders = {}
 
-local function CheckAvailability(info, spellId, providers)
-	if not LibSpellbook:IsKnown(spellId) then
-		Debug('Unknown spell:', info)
-		return false
+addon.RegisterMessage('Rules', 'AdiButtonAuras_BuildRule', function(_, rule)
+	if not builders[rule.key] then return end
+	for i, func in ipairs(builders[rule.key]) do
+		func(rule)
 	end
-	if not providers then return true end
-	for _, provider in ipairs(providers) do
-		if LibSpellbook:IsKnown(provider) then
-			return true
-		end
-	end
-	Debug(info..', no providers found: ', unpack(providers))
-	return false
-end
-
-local function _AddRuleFor(key, desc, spell, units, events, handlers, providers, callLevel)
-	local id, info, name, _type, subId = SpellOrItemId(spell, callLevel)
-	if not id or (_type == "spell" and not CheckAvailability(info, subId, providers)) then
-		return
-	end
-	if key then
-		key = id..':'..key
-		desc = gsub(desc or "", "@NAME", name)
-		descriptions[key] = ucfirst(desc)
-	end
-	Debug("Adding rule for", info,
-		"key:", key,
-		"desc:", desc,
-		"units:", strjoin(",", getkeys(units)),
-		"events:", strjoin(",", getkeys(events)),
-		"handlers:", handlers,
-		"providers:", providers and strjoin(",", unpack(providers)) or "-"
-	)
-	local rule = rules[id]
-	if not rule then
-		rule = { name = name, units = {}, events = {}, handlers = {}, keys = {} }
-		rules[id] = rule
-	end
-	if key then
-		tinsert(rule.keys, key)
-		if not addon.db.profile.rules[key] then
-			return
-		end
-	end
-	MergeSets(rule.units, units)
-	MergeSets(rule.events, events)
-	ConcatLists(rule.handlers, handlers)
-end
+end)
 
 local function CheckRuleArgs(units, events, handlers, providers, callLevel)
 	local numUnits, numEvents
@@ -171,26 +114,53 @@ local function CheckRuleArgs(units, events, handlers, providers, callLevel)
 	return units, events, handlers, providers
 end
 
-local function AddRuleFor(key, desc, spell, units, events, handlers, providers)
-	units, events, handlers, providers = CheckRuleArgs(units, events, handlers, providers, 2)
-	return _AddRuleFor(key, desc, spell, units, events, handlers, providers, 2)
-end
-
 local function Configure(key, desc, spells, units, events, handlers, providers, callLevel)
 	callLevel = callLevel or 1
+
 	spells = AsList(spells)
 	if #spells == 0 then
-		error("Empty spell list", callLevel+1)
+		Debug('No spells for', key)
+		return
 	end
+
 	units, events, handlers, providers = CheckRuleArgs(units, events, handlers, providers, callLevel+1)
-	local builders = {}
-	for i, spell in ipairs(spells) do
-		local spell = spell
-		tinsert(builders, function()
-			_AddRuleFor(key, desc, spell, units, events, handlers, providers, callLevel+1)
-		end)
+
+	local builder = function(rule)
+		local spellKey = rule.id..':'..key
+		rule.descriptions[spellKey] = ucfirst(gsub(desc or "", "@NAME", rule.name))
+		tinsert(rule.keys, spellKey)
+		if not addon.db.profile.rules[spellKey] then
+			return
+		end
+		MergeSets(rule.units, units)
+		MergeSets(rule.events, events)
+		ConcatLists(rule.handlers, handlers)
 	end
-	return #builders == 1 and builders[1] or builders
+
+	if providers then
+		local origBuilder = builder
+		builder = function(rule)
+			for _, provider in ipairs(providers) do
+				if LibSpellbook:IsKnown(provider) then
+					return origBuilder(rule)
+				end
+			end
+		end
+	end
+
+	for i, spell in ipairs(spells) do
+		local key
+		if type(spell) == "string" and spell:match("^item:%d+$") then
+			key = spell
+		else
+			key = "spell:"..spell
+		end
+		if builders[key] then
+			tinsert(builders[key], builder)
+		else
+			builders[key] = { builder }
+		end
+	end
 end
 
 ------------------------------------------------------------------------------
@@ -382,7 +352,6 @@ do
 
 	function ImportPlayerSpells(filter, ...)
 		local exceptions = AsSet({...}, "number", 3)
-		local builders = {}
 		for buff, flags, provider, modified, _, category in LibPlayerSpells:IterateSpells(filter, "AURA", "RAIDBUFF") do
 			local providers = provider ~= buff and FilterOut(AsList(provider, "number"), exceptions)
 			local spells = FilterOut(AsList(modified, "number"), exceptions)
@@ -408,10 +377,9 @@ do
 				local key = BuildKey('LibPlayerSpell', provider, modified, filter, highlight, token, buff)
 				local desc = BuildDesc(filter, highlight, token, buff).." ["..DescribeLPSSource(category).."]"
 				local handler = BuildAuraHandler_Longest(filter, highlight, token, buff, 3)
-				tinsert(builders, Configure(key, desc, spells, token, "UNIT_AURA", handler, provider, 3))
+				Configure(key, desc, spells, token, "UNIT_AURA", handler, provider, 3)
 			end
 		end
-		return (#builders > 1) and builders or builders[1]
 	end
 end
 
@@ -519,4 +487,13 @@ local RULES_ENV = addon.BuildSafeEnv(
 
 function addon.Restricted(func)
 	return setfenv(func, RULES_ENV)
+end
+
+local function errorhandler(msg)
+	addon:Debug('|cffff0000'..tostring(msg)..'|r')
+	return geterrorhandler()(msg)
+end
+
+function addon.api:RegisterRules(callback)
+	xpcall(addon.Restricted(callback), errorhandler)
 end
