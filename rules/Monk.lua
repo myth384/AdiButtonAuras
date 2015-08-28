@@ -252,6 +252,34 @@ AdiButtonAuras:RegisterRules(function()
 				end
 			end,
 		},
+		Configure {
+			"ExpelHarmHint",
+			L["Show hint when Expel Harm won't over heal."],
+			115072, -- Expel Harm
+			"player",
+			{
+				"UNIT_HEALTH_FREQUENT", -- Same event as UNIT_HEALTH, but not throttled as aggressively by the client.
+				"UNIT_MAXHEALTH",
+				"UNIT_AURA",
+				"PLAYER_EQUIPMENT_CHANGED",
+			},
+			function(_, model)
+				local apbase, apbuff, apdebuff = UnitAttackPower("player")
+				local ap = apbase + apbuff + apdebuff
+				local MHstats = GetItemStats(GetInventoryItemLink("player", 16))
+				--local OHstats = GetItemStats(GetInventoryItemLink("player", 17))
+				local MHdps = MHstats["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"]
+				--local OHdps = OHstats["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"]
+				local OHdps = 0
+				local expelharm = 6.742 * MHdps + 3.371 * OHdps + 2.143 * ap
+				local lostHealth = UnitHealthMax("player") - UnitHealth("player")
+				--print(expelharm)
+				if expelharm < lostHealth then
+					model.hint = true
+				end
+			end,
+			-- 115072, -- Expel Harm
+		},
 	}
 
 end)

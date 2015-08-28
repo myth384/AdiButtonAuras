@@ -606,6 +606,7 @@ local RULES_ENV = addon.BuildSafeEnv(
 		"GetTime", "GetTotemInfo", "HasPetSpells", "IsPlayerSpell", "UnitCanAttack",
 		"UnitCastingInfo", "UnitChannelInfo", "UnitClass","UnitHealth", "UnitHealthMax",
 		"UnitIsDeadOrGhost", "UnitIsPlayer", "UnitPower", "UnitPowerMax", "UnitStagger",
+		"UnitAttackPower", "GetInventoryItemLink", "GetItemStats",
 	}
 )
 
