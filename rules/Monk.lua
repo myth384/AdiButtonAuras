@@ -266,23 +266,21 @@ AdiButtonAuras:RegisterRules(function()
 			function(_, model)
 				local apbase, apbuff, apdebuff = UnitAttackPower("player")
 				local ap = apbase + apbuff + apdebuff
-				local MHitem = GetInventoryItemLink("player", 16)
-				local MHdps
-				if MHitem then
-					local MHstats = GetItemStats(MHitem)
-					MHdps = MHstats["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"]
-				else
-					MHdps = 0
+				local vers = GetCombatRatingBonus(29)/100 --CR_VERSATILITY??? CR_VERSATILITY_DAMAGE_DONE
+				local weaponSlots = {16, 17}
+				local item, itemSlot, stats
+				local DPS = {}
+				for _, itemSlot in pairs(weaponSlots) do
+					item = GetInventoryItemLink("player", itemSlot)
+					if item then
+						stats = GetItemStats(item)
+						DPS[itemSlot] = stats["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"]
+						--wipe(stats)
+					else
+						DPS[itemSlot] = 0
+					end
 				end
-				local OHitem = GetInventoryItemLink("player", 17)
-				local OHdps
-				if OHitem then
-					local OHstats = GetItemStats(OHitem)
-					OHdps = OHstats["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"]
-				else
-					OHdps = 0
-				end
-				local expelharm = 6.742 * MHdps + 3.371 * OHdps + 2.143 * ap
+				local expelharm = 7.5 * (( 1.0 * ( 1 + vers )) * ( 1 * ( DPS[16] + 0 * ( DPS[17]/2 )) + ap / 3.5 ))
 				local lostHealth = UnitHealthMax("player") - UnitHealth("player")
 				--print(expelharm)
 				if expelharm < lostHealth then
