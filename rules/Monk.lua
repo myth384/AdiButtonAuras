@@ -280,7 +280,12 @@ AdiButtonAuras:RegisterRules(function()
 						DPS[itemSlot] = 0
 					end
 				end
-				local expelharm = 7.5 * (( 1.0 * ( 1 + vers )) * ( 1 * ( DPS[16] + 0 * ( DPS[17]/2 )) + ap / 3.5 ))
+				local found = GetPlayerBuff("player", 115295) -- Guard
+				local healFactor = 1
+				if found then
+					healFactor = 1.3
+				end
+				local expelharm = 7.5 * (( 1.0 * ( 1 + vers )) * ( 1 * ( DPS[16] + 0 * ( DPS[17]/2 )) + ap / 3.5 )) * healFactor
 				local lostHealth = UnitHealthMax("player") - UnitHealth("player")
 				--print(expelharm)
 				if expelharm < lostHealth then
